@@ -4,6 +4,9 @@ Pure Rust TTS engine with voice cloning. No Python, no CUDA, no safetensors need
 
 Based on **Qwen3-TTS-12Hz-1.7B-Base** (Apache 2.0).
 
+## Downlod 🤗: https://huggingface.co/qoranet/QORA-TTS/
+## Downlod 🤗: https://huggingface.co/qoranet/QORA-TTS-LIGHT
+
 ## Quick Start
 
 ```bash
