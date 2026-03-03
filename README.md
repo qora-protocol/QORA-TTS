@@ -1,288 +1,103 @@
----
-language:
-  - en
-  - zh
-  - de
-  - it
-  - pt
-  - es
-  - ja
-  - ko
-  - fr
-  - ru
-license: apache-2.0
-tags:
-  - rust
-  - cpu-inference
-  - quantized
-  - q4
-  - text-to-speech
-  - tts
-  - pure-rust
-  - no-python
-  - no-cuda
-  - multi-speaker
-  - multilingual
-library_name: qora
-pipeline_tag: text-to-speech
----
+# QORA-TTS 1.7B - Pure Rust Text-to-Speech with Voice Cloning
 
-# QORA-TTS - Native Rust Text-to-Speech Engine
+Pure Rust TTS engine with voice cloning. No Python, no CUDA, no safetensors needed. Single executable + Q4 binary = portable TTS.
 
-<img width="1395" height="926" alt="Screenshot 2026-02-27 174517" src="https://github.com/user-attachments/assets/0a0da12f-4fc2-4be2-a8e8-14396691ecce" />
+Based on **Qwen3-TTS-12Hz-1.7B-Base** (Apache 2.0).
 
-## Downlod 🤗: https://huggingface.co/qoranet/QORA-TTS
+## Quick Start
 
-Pure Rust text-to-speech synthesis engine. No Python runtime, no CUDA, no external dependencies. Single executable + quantized weights = portable TTS on any machine.
+```bash
+# Voice cloning with included voice
+qora-tts.exe --model-path . --ref-audio voices/luna.wav --text "Hello, how are you?" --language english
 
-## Overview
+# Different voice
+qora-tts.exe --model-path . --ref-audio voices/adam.wav --text "Good morning!" --language english
 
-| Property | Value |
-|----------|-------|
-| **Engine** | QORA-TTS (Pure Rust) |
-| **Base Model** | Qwen3-TTS 1.7B |
-| **Parameters** | ~1.84B (Talker) + ~150M (Code Predictor) + Decoder |
-| **Quantization** | Q4 (4-bit symmetric, group_size=32) |
-| **Model Size** | 1.5 GB (Q4) |
-| **Executable** | 4.0 MB |
-| **Sample Rate** | 24 kHz (16-bit PCM WAV) |
-| **Languages** | 12 (English, Chinese, German, Italian, Portuguese, Spanish, Japanese, Korean, French, Russian, + 2 dialects) |
-| **Speakers** | 9 built-in voices |
-| **Platform** | Windows x86_64 (CPU-only) |
+# Clone your own voice (any 24kHz WAV)
+qora-tts.exe --model-path . --ref-audio my_recording.wav --text "Custom voice" --language english
 
-## Architecture
+# Control length (codes = seconds x 12.5)
+qora-tts.exe --model-path . --ref-audio voices/luna.wav --text "Short" --max-codes 100
 
-### Talker (Main Model) - 28-layer Transformer
-
-| Component | Details |
-|-----------|---------|
-| **Layers** | 28 decoder layers |
-| **Hidden Size** | 2,048 |
-| **Attention Heads** | 16 (Query) / 8 (KV) - Grouped Query Attention |
-| **Head Dimension** | 128 |
-| **MLP (Intermediate)** | 6,144 (SwiGLU) |
-| **Text Vocabulary** | 151,936 tokens |
-| **Codec Vocabulary** | 3,072 codes |
-| **Max Context** | 32,768 tokens |
-| **RoPE Theta** | 1,000,000 (multimodal, interleaved) |
-
-### Code Predictor - 5-layer Transformer
-
-| Component | Details |
-|-----------|---------|
-| **Layers** | 5 |
-| **Hidden Size** | 1,024 |
-| **Attention Heads** | 16 (Query) / 8 (KV) |
-| **Intermediate** | 3,072 |
-| **Code Groups** | 16 (generates codes 1-15 in parallel from code 0) |
-
-### Speech Decoder (Vocos)
-
-| Component | Details |
-|-----------|---------|
-| **Architecture** | 8-layer Transformer + 2x Upsampling + Vocos vocoder |
-| **Codebook** | 512-dim embeddings |
-| **Output** | 24 kHz 16-bit PCM WAV |
-
-## Synthesis Pipeline
-
-```
-Text → Tokenize → Talker (28 layers, autoregressive)
-                       ↓
-                  Code 0 sequence (12.5 Hz)
-                       ↓
-              Code Predictor (5 layers)
-                       ↓
-              16 code groups per timestep
-                       ↓
-              Speech Decoder (Vocos)
-                       ↓
-              24 kHz WAV audio
+# Custom output path
+qora-tts.exe --model-path . --ref-audio voices/sagar.wav --text "Hi there" --language english --output greeting.wav
 ```
 
 ## Files
 
 ```
-model/
-  qora-tts.exe        - 4.0 MB    Inference engine
-  model.qora-tts      - 1.5 GB    Q4 quantized weights
-  tokenizer.json      - 11 MB     Tokenizer (151,936 vocab)
-  config.json         - 4.9 KB    Model configuration
-  README.md           - This file
+  qora-tts.exe          4.3 MB   Inference engine
+  model.qora-tts     1559 MB     Q4 weights (talker + predictor + decoder + speaker encoder)
+  config.json           4.4 KB   Model configuration
+  tokenizer.json         11 MB   Tokenizer (151,936 vocab)
+  vocab.json            2.7 MB   Vocabulary
+  merges.txt            1.6 MB   BPE merges
+  tokenizer_config.json 7.2 KB   Tokenizer config
+  voices/                         Reference WAV files for voice cloning
 ```
 
-## Usage
+**No safetensors needed.** Everything loads from `model.qora-tts`.
 
-```bash
-# Basic TTS (default speaker: ryan)
-qora-tts.exe --load model.qora-tts --text "Hello, how are you today?"
+## Model Info
 
-# Choose speaker and output file
-qora-tts.exe --load model.qora-tts --text "Good morning!" --speaker serena --output greeting.wav
+| Property | Value |
+|----------|-------|
+| Base Model | Qwen3-TTS-12Hz-1.7B-Base |
+| Type | Voice cloning only (no built-in speakers) |
+| Quantization | Q4 (4-bit symmetric, group_size=32) |
+| Binary Size | 1559 MB |
+| Sample Rate | 24 kHz mono WAV |
+| Languages | English, Chinese, German, Italian, Portuguese, Spanish, Japanese, Korean, French, Russian |
 
-# Different language
-qora-tts.exe --load model.qora-tts --text "Bonjour le monde" --speaker dylan --language french
+## Architecture
 
-# Control audio length
-qora-tts.exe --load model.qora-tts --text "Short text" --max-codes 200
-```
+| Component | Details |
+|-----------|---------|
+| **Talker** | 28 layers, hidden=2048, 16/8 GQA heads, SwiGLU 6144 |
+| **Code Predictor** | 5 layers, hidden=1024, 16 code groups |
+| **Speech Decoder** | 8-layer transformer + Vocos vocoder |
+| **Speaker Encoder** | ECAPA-TDNN (3 Res2Net blocks, 2048-dim output) |
 
-### CLI Arguments
+## CLI Arguments
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--load <path>` | - | Load from .qora-tts binary (fast, ~2-3s) |
-| `--model-path <path>` | `.` | Path to safetensors model directory |
+| `--model-path <dir>` | `.` | Directory containing model.qora-tts + config |
 | `--text <text>` | "Hello, how are you today?" | Text to synthesize |
-| `--speaker <name>` | ryan | Speaker voice (see list below) |
+| `--ref-audio <wav>` | - | **Required** - reference WAV for voice cloning |
 | `--language <name>` | english | Target language |
-| `--output <path>` | output.wav | Output WAV file path |
-| `--max-codes <n>` | 500 | Max audio code timesteps (~n/12.5 seconds) |
-| `--f16` | off | Use F16 weights instead of Q4 |
-| `--save <path>` | - | Save model as .qora-tts binary |
+| `--output <path>` | output.wav | Output WAV path |
+| `--max-codes <n>` | 500 | Max code timesteps (~n/12.5 seconds) |
 
-### Available Speakers
+## Included Voices
 
-| Speaker | Language | ID |
-|---------|----------|-----|
-| **ryan** | English | 3061 |
-| **serena** | English | 3066 |
-| **vivian** | English | 3065 |
-| **aiden** | English | 3062 |
-| **eric** | English | 3063 |
-| **uncle_fu** | Chinese | 3057 |
-| **ono_anna** | Japanese | 3064 |
-| **sohee** | Korean | 3067 |
-| **dylan** | Beijing Dialect | 3060 |
+| Female | Male |
+|--------|------|
+| luna, anushri, beth, caty, cherie, ember, faith, hope, jessica, kea, riya, vidhi, velvety | adam, charles, david, hale, heisenberg, joe, peter, quentin, sagar, steven, titan, true |
 
-### Supported Languages
+All 24kHz WAV files in `voices/`. Use any 3-10 second clean speech recording for custom voice cloning.
 
-English, Chinese, German, Italian, Portuguese, Spanish, Japanese, Korean, French, Russian, Beijing Dialect, Sichuan Dialect
+## Performance (i5-11500, 16GB RAM, CPU-only)
 
-## Performance Benchmarks
+| Phase | Time |
+|-------|------|
+| Model Load | ~0.8s (from binary) |
+| Voice Extraction | ~5-10s |
+| Prefill | ~3-8s |
+| Code Generation | ~2.5s/code |
+| Audio Decode | ~0.5s/frame |
+| Memory | ~1560 MB |
 
-**Test Hardware:** Windows 11, CPU-only (no GPU acceleration)
+## Converting from Safetensors
 
-### Inference Speed
-
-| Phase | Time | Details |
-|-------|------|---------|
-| **Model Load** | ~20-23s | From .qora-tts binary (1.5 GB Q4) |
-| **Prefill** | ~18s | Process prompt tokens (17-23 tokens) |
-| **Code Generation** | ~1,200s | 484-499 steps at 0.4 codes/s |
-| **Audio Decode** | ~600-800s | Vocos decoder (8 transformer + upsampling) |
-| **Memory** | 1,511 MB | Total loaded model size |
-
-### Audio Output
-
-| Metric | Value |
-|--------|-------|
-| **Sample Rate** | 24,000 Hz |
-| **Bit Depth** | 16-bit PCM |
-| **Format** | WAV |
-| **Audio Rate** | 12.5 Hz codec = ~40s audio from 500 codes |
-| **Channels** | Mono |
-
-## Test Results
-
-### Test 1: Short Greeting (Speaker: Ryan)
-
-**Input:** "Hello, how are you today?"
-
-| Metric | Value |
-|--------|-------|
-| Prompt Tokens | 17 |
-| Load Time | 22.9s |
-| Prefill Time | 17.7s |
-| Code Steps | 484 |
-| Code Generation | 1,197.3s (0.4 codes/s) |
-| Audio Duration | ~38.7s |
-| Result | WAV generated successfully |
-
-### Test 2: Pangram (Speaker: Serena)
-
-**Input:** "The quick brown fox jumps over the lazy dog."
-
-| Metric | Value |
-|--------|-------|
-| Prompt Tokens | 20 |
-| Load Time | 18.9s |
-| Prefill Time | 19.2s |
-| Code Steps | 499 |
-| Code Generation | 1,196.4s (0.4 codes/s) |
-| Audio Duration | ~39.9s |
-| Result | WAV generated successfully |
-
-### Test 3: Science Text (Speaker: Vivian)
-
-**Input:** "Quantum computing represents a fundamental shift in how we process information."
-
-| Metric | Value |
-|--------|-------|
-| Prompt Tokens | 23 |
-| Load Time | 20.8s |
-| Prefill Time | 18.2s |
-| Code Steps | 484 |
-| Code Generation | 1,193.6s (0.4 codes/s) |
-| Audio Duration | ~38.7s |
-| Result | WAV generated successfully |
-
-### Test Summary
-
-| Test | Speaker | Text Length | Codes | Audio Length | Status |
-|------|---------|-------------|-------|-------------|--------|
-| Greeting | Ryan | 25 chars | 484 | ~38.7s | PASS |
-| Pangram | Serena | 44 chars | 499 | ~39.9s | PASS |
-| Science | Vivian | 79 chars | 484 | ~38.7s | PASS |
-
-All three tests generated valid WAV audio files at 24 kHz with different speakers.
-
-## Technical Details
-
-### Quantization
-
-- **Q4**: 4-bit symmetric, group_size=32 (default, 1.5 GB)
-- **F16**: Half-precision floats (optional, ~3 GB)
-- 6.4x compression ratio from f32 to Q4
-
-### Generation Parameters
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| Temperature | 0.9 | Sampling randomness |
-| Top-K | 50 | Top-K sampling |
-| Repetition Penalty | 1.05 | Prevents repetitive codes |
-
-### Special Tokens
-
-| Token | ID | Purpose |
-|-------|-----|---------|
-| TTS BOS | 151,672 | Start of TTS sequence |
-| TTS EOS | 151,673 | End of TTS sequence |
-| Codec BOS | 2,149 | Start of codec sequence |
-| Codec EOS | 2,150 | End of codec sequence |
-
-## QORA Model Family
-
-| Engine | Model | Params | Size (Q4) | Purpose |
-|--------|-------|--------|-----------|---------|
-| **QORA** | SmolLM3-3B | 3.07B | 1.68 GB | Text generation, reasoning, chat |
-| **QORA-TTS** | Qwen3-TTS | 1.84B | 1.5 GB | Text-to-speech synthesis |
-| **QORA-Vision (Image)** | SigLIP 2 Base | 86M | 58 MB | Image embeddings, zero-shot classification |
-| **QORA-Vision (Video)** | ViViT Base | 89M | 60 MB | Video action classification |
-
-All engines are pure Rust, CPU-only, single-binary executables with no Python dependencies.
-
-## Building from Source
+If you have the original safetensors, convert to binary:
 
 ```bash
-cd QORA-TTS
-cargo build --release
-
-# Convert from safetensors to .qora-tts binary:
-./target/release/qora-tts.exe --model-path ../Qwen3-TTS/ --save model/model.qora-tts
+qora-tts.exe --model-path <safetensors_dir> --save model.qora-tts --text "x" --max-codes 1
 ```
+
+This creates a single binary with all weights (talker + predictor + decoder + speaker encoder). After conversion, safetensors files are no longer needed.
 
 ---
 
-*Built with QORA - Pure Rust AI Inference*
+**Built with QORA - Pure Rust AI Inference**
